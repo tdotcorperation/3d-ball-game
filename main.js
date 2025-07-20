@@ -72,8 +72,24 @@ const levelInfo = document.getElementById('info');
 const clearMessage = document.getElementById('clear-message');
 const clearMessageHeader = clearMessage.querySelector('h1');
 const clearMessageParagraph = clearMessage.querySelector('p');
+const outMessage = document.getElementById('out-message'); // OUT 메시지 요소 추가
 
 // --- 게임 로직 함수 ---
+function handleOut() {
+    gameActive = false;
+    isFalling = true;
+    setTimeout(() => {
+        sphere.visible = false; // 공을 잠시 숨김
+        outMessage.style.display = 'block';
+        setTimeout(restartCurrentLevel, 30000); // 30초 후 재시작
+    }, 1500); // 1.5초 후 OUT 메시지 표시
+}
+
+function restartCurrentLevel() {
+    outMessage.style.display = 'none';
+    loadLevel(currentLevel);
+}
+
 function generateLevel(level) {
     // 기존 장애물 제거
     obstacles.forEach(obs => scene.remove(obs));
@@ -114,6 +130,7 @@ function loadLevel(level) {
         clearMessageHeader.textContent = 'ALL CLEAR!';
         clearMessageParagraph.textContent = '모든 레벨을 클리어했습니다!';
         clearMessage.style.display = 'block';
+        outMessage.style.display = 'none'; // OUT 메시지 숨김
         return;
     }
 
@@ -121,6 +138,7 @@ function loadLevel(level) {
     levelInfo.textContent = `Level: ${currentLevel}`;
     gameActive = true;
     clearMessage.style.display = 'none';
+    outMessage.style.display = 'none'; // OUT 메시지 숨김
     resetPlayer();
     generateLevel(currentLevel);
 }
@@ -155,20 +173,19 @@ function animate() {
 
         for (const obstacle of obstacles) {
             if (sphere.position.distanceTo(obstacle.position) < 1.1) {
-                // OUT 처리 로직은 다음 단계에서 추가
-                sphere.position.copy(sphere.position); // 임시로 움직임만 멈춤
-                break;
+                handleOut();
+                return;
             }
         }
 
         if (sphere.position.x > 10 || sphere.position.x < -10 || sphere.position.z > 20 || sphere.position.z < -20) {
-            // OUT 처리 로직은 다음 단계에서 추가
-            sphere.position.copy(sphere.position); // 임시로 움직임만 멈춤
+            handleOut();
+            return;
         }
 
         if (sphere.position.distanceTo(goal.position) < 1.5) {
             gameActive = false;
-            isTeleporting = true; // 텔레포트 애니메이션 활성화
+            isTeleporting = true;
             clearMessageHeader.textContent = 'CLEAR!';
             clearMessageParagraph.textContent = '다음 레벨로 이동합니다...';
             clearMessage.style.display = 'block';
@@ -176,7 +193,10 @@ function animate() {
         }
     }
 
-    // 애니메이션 처리 (텔레포트만 먼저 구현)
+    // 애니메이션 처리
+    if (isFalling) {
+        sphere.position.y -= 0.2; // 아래로 떨어지는 효과
+    }
     if (isTeleporting) {
         sphere.scale.lerp(new THREE.Vector3(0.01, 0.01, 0.01), 0.1); // 작아지는 효과
     }

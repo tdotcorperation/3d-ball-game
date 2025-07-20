@@ -37,3 +37,26 @@ body {
     padding: 10px;
     border-radius: 5px;
 }
+
+#out-message {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ff4444;
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 30px 60px;
+    border-radius: 15px;
+    text-align: center;
+    border: 2px solid #ff4444;
+}
+
+#out-message h1 {
+    font-size: 4em;
+    margin: 0;
+}
+
+#out-message p {
+    font-size: 1.2em;
+    margin-top: 10px;
+}
