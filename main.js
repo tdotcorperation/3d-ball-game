@@ -1,122 +1,198 @@
 import * as THREE from 'three';
 
-// 기본 설정
+// --- 기본 설정 ---
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true; // 그림자 활성화
 document.getElementById('game-container').appendChild(renderer.domElement);
 
-// 조명
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+// --- 배경 및 조명 ---
+const textureLoader = new THREE.TextureLoader();
+const spaceTexture = textureLoader.load(
+    'https://cors-anywhere.herokuapp.com/https://png.pngtree.com/thumb_back/fh260/background/20230416/pngtree-game-universe-planet-image_2408908.jpg',
+    () => {
+        const rt = new THREE.WebGLCubeRenderTarget(spaceTexture.image.height);
+        rt.fromEquirectangularTexture(renderer, spaceTexture);
+        scene.background = rt.texture;
+    },
+    undefined,
+    (err) => {
+        console.error('An error happened while loading the background texture.', err);
+        scene.background = new THREE.Color(0x101020);
+    }
+);
+
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
 scene.add(ambientLight);
-const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-directionalLight.position.set(5, 10, 7.5);
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1.5);
+directionalLight.position.set(10, 20, 15);
+directionalLight.castShadow = true; // 그림자 생성
+directionalLight.shadow.mapSize.width = 2048;
+directionalLight.shadow.mapSize.height = 2048;
 scene.add(directionalLight);
 
-// 바닥
+// --- 게임 요소 ---
 const groundGeometry = new THREE.PlaneGeometry(20, 40);
-const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x808080, metalness: 0.2, roughness: 0.8 });
 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
 ground.rotation.x = -Math.PI / 2;
 ground.position.y = -0.5;
+ground.receiveShadow = true; // 그림자 받기
 scene.add(ground);
 
-// 공
 const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-const sphereMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffffff, // 공 색상을 흰색으로 변경
-    metalness: 0.8,  // 금속성 재질로 변경
-    roughness: 0.2   // 표면을 매끄럽게
-});
+const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.9, roughness: 0.1 });
 const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-sphere.position.set(0, 0.5, 18); // 공의 시작 높이를 0.5로 조정
+sphere.castShadow = true; // 그림자 생성
 scene.add(sphere);
 
-// 장애물 (큐브)
-const obstacles = [];
-const obstacleGeometry = new THREE.BoxGeometry(1, 1, 1);
-const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0x0000ff });
-
-const obstaclePositions = [
-    new THREE.Vector3(0, 0, 10),
-    new THREE.Vector3(5, 0, 5),
-    new THREE.Vector3(-5, 0, 0),
-    new THREE.Vector3(0, 0, -5),
-    new THREE.Vector3(5, 0, -10),
-];
-
-obstaclePositions.forEach(pos => {
-    const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
-    obstacle.position.copy(pos);
-    obstacles.push(obstacle);
-    scene.add(obstacle);
-});
-
-// 골대
 const goalGeometry = new THREE.BoxGeometry(3, 1, 1);
-const goalMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+const goalMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00, emissive: 0x22ff22 });
 const goal = new THREE.Mesh(goalGeometry, goalMaterial);
 goal.position.set(0, 0, -18);
+goal.receiveShadow = true;
 scene.add(goal);
 
-// 카메라 위치
-camera.position.set(0, 15, 22);
-camera.lookAt(0, 0, 0);
+let obstacles = [];
+const obstacleGeometry = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000, metalness: 0.5, roughness: 0.5 });
 
-// 키보드 입력 처리
+// --- 게임 상태 및 UI ---
+const MAX_LEVEL = 44;
+let currentLevel = 1;
+let gameActive = true;
+let isFalling = false;
+let isTeleporting = false;
 const keys = {};
+const speed = 0.12;
+
+const levelInfo = document.getElementById('info');
+const clearMessage = document.getElementById('clear-message');
+const clearMessageHeader = clearMessage.querySelector('h1');
+const clearMessageParagraph = clearMessage.querySelector('p');
+
+// --- 게임 로직 함수 ---
+function generateLevel(level) {
+    // 기존 장애물 제거
+    obstacles.forEach(obs => scene.remove(obs));
+    obstacles = [];
+    
+    let obstacleCount;
+    if (level < 36) {
+        obstacleCount = 5 + level * 2; // 35레벨까지는 2개씩 증가
+    } else {
+        obstacleCount = 5 + 35 * 2 + (level - 35); // 36레벨부터는 1개씩 증가
+    }
+
+    for (let i = 0; i < obstacleCount; i++) {
+        const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+        obstacle.position.set(
+            (Math.random() - 0.5) * 18,
+            0.1,
+            (Math.random() * 30) - 15
+        );
+        obstacle.castShadow = true;
+        obstacle.receiveShadow = true;
+        obstacles.push(obstacle);
+        scene.add(obstacle);
+    }
+}
+
+function resetPlayer() {
+    sphere.position.set(0, 0.5, 18);
+    sphere.scale.set(1, 1, 1); // 크기 초기화
+    sphere.visible = true;
+    isFalling = false;
+    isTeleporting = false;
+}
+
+function loadLevel(level) {
+    if (level > MAX_LEVEL) {
+        gameActive = false;
+        clearMessageHeader.textContent = 'ALL CLEAR!';
+        clearMessageParagraph.textContent = '모든 레벨을 클리어했습니다!';
+        clearMessage.style.display = 'block';
+        return;
+    }
+
+    currentLevel = Math.max(1, level);
+    levelInfo.textContent = `Level: ${currentLevel}`;
+    gameActive = true;
+    clearMessage.style.display = 'none';
+    resetPlayer();
+    generateLevel(currentLevel);
+}
+
+// --- 카메라 로직 ---
+const cameraOffset = new THREE.Vector3(0, 5, 7);
+function updateCamera() {
+    const targetPosition = new THREE.Vector3().copy(sphere.position).add(cameraOffset);
+    camera.position.lerp(targetPosition, 0.05); // 부드럽게 이동
+    camera.lookAt(sphere.position);
+}
+
+// --- 이벤트 리스너 ---
 document.addEventListener('keydown', (event) => {
-    keys[event.code] = true;
+    if (event.code.startsWith('Arrow')) keys[event.code] = true;
+    if (event.code === 'KeyN') loadLevel(currentLevel + 1);
+    if (event.code === 'KeyP') loadLevel(currentLevel - 1);
 });
 document.addEventListener('keyup', (event) => {
-    keys[event.code] = false;
+    if (event.code.startsWith('Arrow')) keys[event.code] = false;
 });
 
-const speed = 0.1;
-let gameCleared = false;
-
+// --- 게임 루프 ---
 function animate() {
-    if (gameCleared) return;
-
     requestAnimationFrame(animate);
 
-    // 공 움직임
-    const originalPosition = sphere.position.clone();
+    if (gameActive) {
+        if (keys['ArrowUp']) sphere.position.z -= speed;
+        if (keys['ArrowDown']) sphere.position.z += speed;
+        if (keys['ArrowLeft']) sphere.position.x -= speed;
+        if (keys['ArrowRight']) sphere.position.x += speed;
 
-    if (keys['ArrowUp']) sphere.position.z -= speed;
-    if (keys['ArrowDown']) sphere.position.z += speed;
-    if (keys['ArrowLeft']) sphere.position.x -= speed;
-    if (keys['ArrowRight']) sphere.position.x += speed;
+        for (const obstacle of obstacles) {
+            if (sphere.position.distanceTo(obstacle.position) < 1.1) {
+                // OUT 처리 로직은 다음 단계에서 추가
+                sphere.position.copy(sphere.position); // 임시로 움직임만 멈춤
+                break;
+            }
+        }
 
-    // 충돌 감지 (장애물)
-    for (const obstacle of obstacles) {
-        if (sphere.position.distanceTo(obstacle.position) < 1) {
-            sphere.position.copy(originalPosition); // 충돌 시 위치 복원
-            break;
+        if (sphere.position.x > 10 || sphere.position.x < -10 || sphere.position.z > 20 || sphere.position.z < -20) {
+            // OUT 처리 로직은 다음 단계에서 추가
+            sphere.position.copy(sphere.position); // 임시로 움직임만 멈춤
+        }
+
+        if (sphere.position.distanceTo(goal.position) < 1.5) {
+            gameActive = false;
+            isTeleporting = true; // 텔레포트 애니메이션 활성화
+            clearMessageHeader.textContent = 'CLEAR!';
+            clearMessageParagraph.textContent = '다음 레벨로 이동합니다...';
+            clearMessage.style.display = 'block';
+            setTimeout(() => loadLevel(currentLevel + 1), 2000);
         }
     }
-    
-    // 경계 체크
-    if (sphere.position.x > 9.5 || sphere.position.x < -9.5 || sphere.position.z > 19.5 || sphere.position.z < -19.5) {
-        sphere.position.copy(originalPosition);
+
+    // 애니메이션 처리 (텔레포트만 먼저 구현)
+    if (isTeleporting) {
+        sphere.scale.lerp(new THREE.Vector3(0.01, 0.01, 0.01), 0.1); // 작아지는 효과
     }
 
-
-    // 골인 판정
-    if (sphere.position.distanceTo(goal.position) < 1.5) {
-        gameCleared = true;
-        document.getElementById('clear-message').style.display = 'block';
-    }
-
+    updateCamera();
     renderer.render(scene, camera);
 }
 
-animate();
-
-// 창 크기 조절 대응
-window.addEventListener('resize', () => {
+// --- 창 크기 조절 ---
+function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-});
+}
+window.addEventListener('resize', onWindowResize);
+
+// --- 게임 시작 ---
+loadLevel(1);
+animate();
