@@ -24,10 +24,13 @@ scene.add(ground);
 
 // 공
 const sphereGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-const sphereMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+const sphereMaterial = new THREE.MeshStandardMaterial({
+    color: 0xffffff, // 공 색상을 흰색으로 변경
+    metalness: 0.8,  // 금속성 재질로 변경
+    roughness: 0.2   // 표면을 매끄럽게
+});
 const sphere = new THREE.Mesh(sphereGeometry, sphereMaterial);
-sphere.position.y = 0;
-sphere.position.z = 18;
+sphere.position.set(0, 0.5, 18); // 공의 시작 높이를 0.5로 조정
 scene.add(sphere);
 
 // 장애물 (큐브)
