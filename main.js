@@ -72,7 +72,7 @@ const levelInfo = document.getElementById('info');
 const clearMessage = document.getElementById('clear-message');
 const clearMessageHeader = clearMessage.querySelector('h1');
 const clearMessageParagraph = clearMessage.querySelector('p');
-const outMessage = document.getElementById('out-message'); // OUT 메시지 요소 추가
+const outMessage = document.getElementById('out-message');
 
 // --- 게임 로직 함수 ---
 function handleOut() {
